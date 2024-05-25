@@ -1,39 +1,22 @@
 import json
 import os
 
-from bs4 import BeautifulSoup4
-from pyspark import SparkConf, SparkContext
+from bs4 import BeautifulSoup
 
 
 class HTMLScraper:
     def __init__(self, directory):
         self.directory = directory
+        self.all_data = []
 
     def scrape(self):
-        # Initialize Spark context
-        conf = SparkConf().setAppName("HTMLScraper").setMaster("local[*]")
-        sc = SparkContext(conf=conf)
-
-        # Get list of files in the directory
-        file_paths = [os.path.join(self.directory, filename) for filename in os.listdir(self.directory) if filename.endswith('.html')]
-
-        # Parallelize the file paths
-        file_paths_rdd = sc.parallelize(file_paths)
-
-        # Process each file in parallel
-        data_rdd = file_paths_rdd.map(self._process_file)
-
-        # Collect the results
-        self.all_data = data_rdd.collect()
-
-        # Stop the Spark context
-        sc.stop()
-
-    def _process_file(self, file_path):
-        html_content = self._read_html(file_path)
-        if html_content:
-            return self._parse_html(html_content, os.path.basename(file_path))
-        return None
+        for filename in os.listdir(self.directory):
+            if filename.endswith('.html'):
+                file_path = os.path.join(self.directory, filename)
+                html_content = self._read_html(file_path)
+                if html_content:
+                    data = self._parse_html(html_content, filename)
+                    self.all_data.append(data)
 
     def _read_html(self, file_path):
         try:
@@ -44,7 +27,7 @@ class HTMLScraper:
             return None
 
     def _parse_html(self, html_content, filename):
-        soup = BeautifulSoup4(html_content, 'html.parser')
+        soup = BeautifulSoup(html_content, 'html.parser')
         price_value = self._get_element_text(soup, 'span', 'norm-price ng-binding')
         location_value = self._get_element_text(soup, 'span', 'location-text ng-binding')
         params1 = self._extract_params(soup, 'ul', 'params1')
