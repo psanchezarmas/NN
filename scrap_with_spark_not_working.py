@@ -1,3 +1,4 @@
+import json
 import os
 
 from bs4 import BeautifulSoup
@@ -7,8 +8,9 @@ from pyspark.sql.types import (IntegerType, MapType, StringType, StructField,
 
 
 class HTMLScraper:
-    def __init__(self, directory):
+    def __init__(self, directory, spark):
         self.directory = directory
+        self.spark = spark
         self.all_data = []
 
     def scrape(self):
@@ -36,7 +38,7 @@ class HTMLScraper:
             location_value = self._get_element_text(soup, 'span', 'location-text ng-binding')
             params1 = self._extract_params(soup, 'ul', 'params1')
             params2 = self._extract_params(soup, 'ul', 'params2')
-            
+
             price_value_cleaned, currency = self.clean_price_value(price_value)
 
             return {
@@ -75,12 +77,8 @@ class HTMLScraper:
                     params[label.get_text(strip=True)] = value.get_text(strip=True)
         return params
 
-    def display_table(self):
+    def show(self):
         try:
-            spark = SparkSession.builder.master("local[1]") \
-                .appName("HTML Scraper") \
-                .getOrCreate()
-
             schema = StructType([
                 StructField("filename", StringType(), True),
                 StructField("price_value", IntegerType(), True),
@@ -90,18 +88,20 @@ class HTMLScraper:
                 StructField("params2", MapType(StringType(), StringType()), True)
             ])
 
-            df = spark.createDataFrame(self.all_data, schema)
-            df.show()
+            df = self.spark.createDataFrame(self.all_data, schema).toPandas()
             
-            spark.stop()
+            #df.show(truncate=False)  # Use truncate=False to show full column content
         except Exception as e:
-            print(f"Error displaying table: {e}")
-
+            print(f"Error displaying DataFrame: {e}")
 
 if __name__ == "__main__":
     directory = 'data'
-  
 
-    scraper = HTMLScraper(directory)
+    # Create Spark session
+    spark = SparkSession.builder \
+        .appName("HTML Scraper") \
+        .getOrCreate()
+
+    scraper = HTMLScraper(directory, spark)
     scraper.scrape()
-    scraper.display_table()
+    scraper.show()
